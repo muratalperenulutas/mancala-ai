@@ -10,9 +10,24 @@ class GameBoard:
         self.node_dict: Dict[str, Base] = {}
         self.bank1 = None
         self.bank2 = None
+        self.old_stone_count = 0
+        self.old_player = None
         self.current_player = 1
-        self.gameover = False
+        self.game_finish = False
         self.movements = []
+        self.stones_earned = 0
+        
+    def reset(self):
+        self.linked_node_start = None
+        self.node_dict = {}
+        self.bank1 = None
+        self.bank2 = None
+        self.old_stone_count = 0
+        self.old_player = None
+        self.current_player = 1
+        self.game_finish = False
+        self.movements = []
+        self.stones_earned = 0    
 
     def initialize(self):
         last_node = None
@@ -38,6 +53,13 @@ class GameBoard:
             last_node = node
 
     def move_stones(self, start_index):
+        self.stones_earned = 0
+        self.old_player = self.current_player
+        self.old_stone_count = (
+            self.bank1.stone_count
+            if self.current_player == 1
+            else self.bank2.stone_count
+        )
         self.movements.append(start_index)
         current_pit = self.distribute_stones(start_index)
 
@@ -45,7 +67,14 @@ class GameBoard:
             self.get_if_opposite_stones(current_pit)
 
         self.take_stones_if_even(start_index, current_pit)
-        self.check_side_empty()
+
+        self.check_side_empty() 
+
+        self.stones_earned = (
+            self.bank1.stone_count
+            if self.current_player == 1
+            else self.bank2.stone_count
+        ) - self.old_stone_count
 
         if self.current_player == 1 and current_pit.index == 6:
             self.current_player = 1
@@ -55,6 +84,7 @@ class GameBoard:
             self.current_player = 2
         else:
             self.current_player = 1
+   
 
     def take_stones_if_even(self, start_index, current_pit: Base):
         if (
@@ -114,7 +144,7 @@ class GameBoard:
             )
             for i in range(0, 6):
                 self.node_dict[i].stone_count = 0
-            self.gameover = True
+            self.game_finish = True
             self.save()
         elif all(self.node_dict[i].stone_count == 0 for i in range(0, 6)):
             self.bank1.stone_count += sum(
@@ -122,7 +152,7 @@ class GameBoard:
             )
             for i in range(7, 13):
                 self.node_dict[i].stone_count = 0
-            self.gameover = True
+            self.game_finish = True
             self.save()
 
     def play(self, pit_index, player=None):
@@ -164,10 +194,34 @@ class GameBoard:
         print()
         print()
 
-    def get_array(self):
+    def get_status(self):
         array = []
         for i in range(0, 14):
             array.append(self.node_dict[i].stone_count)
         array.append(self.current_player)
-        array.append(1 if self.gameover else 0)
+        array.append(1 if self.game_finish else 0)
         return array
+
+    def get_score(self):
+        score = 0
+        score += self.stones_earned / 10
+        if self.game_finish:
+            if self.old_player == 1 and self.bank1.stone_count > self.bank2.stone_count:
+                score += 1
+            elif self.old_player == 2 and self.bank2.stone_count > self.bank1.stone_count:
+                score += 1
+            elif self.bank1.stone_count == self.bank2.stone_count:
+                score += 0.5      
+            else:
+                score += -1
+        return score
+
+    def get_playable_pits(self):
+        if self.current_player == 1:
+            return [i for i in range(0, 6) if self.node_dict[i].stone_count > 0]
+        else:
+            return [i for i in range(7, 13) if self.node_dict[i].stone_count > 0]
+
+board = GameBoard()
+board.initialize()
+print(board.get_status())
