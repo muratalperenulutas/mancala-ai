@@ -16,6 +16,7 @@ class GameBoard:
         self.game_finish = False
         self.movements = []
         self.stones_earned = 0
+        self.second_move = False
         
     def reset(self):
         self.linked_node_start = None
@@ -27,7 +28,8 @@ class GameBoard:
         self.current_player = 1
         self.game_finish = False
         self.movements = []
-        self.stones_earned = 0    
+        self.stones_earned = 0  
+        self.second_move = False  
 
     def initialize(self):
         last_node = None
@@ -77,8 +79,10 @@ class GameBoard:
         ) - self.old_stone_count
 
         if self.current_player == 1 and current_pit.index == 6:
+            self.second_move = True
             self.current_player = 1
         elif self.current_player == 2 and current_pit.index == 13:
+            self.second_move = True
             self.current_player = 2
         elif self.current_player == 1:
             self.current_player = 2
@@ -205,13 +209,14 @@ class GameBoard:
     def get_score(self):
         score = 0
         score += self.stones_earned / 10
+        score += 0.2 if self.second_move else 0
         if self.game_finish:
             if self.old_player == 1 and self.bank1.stone_count > self.bank2.stone_count:
                 score += 1
             elif self.old_player == 2 and self.bank2.stone_count > self.bank1.stone_count:
                 score += 1
             elif self.bank1.stone_count == self.bank2.stone_count:
-                score += 0.5      
+                score += 0.4      
             else:
                 score += -1
         return score
