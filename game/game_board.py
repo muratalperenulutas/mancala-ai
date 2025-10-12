@@ -14,9 +14,9 @@ class GameBoard:
         self.old_player = None
         self.current_player = 1
         self.game_finish = False
-        self.movements = []
         self.stones_earned = 0
         self.second_move = False
+        self.verbose = False
         
     def reset(self):
         self.linked_node_start = None
@@ -27,7 +27,6 @@ class GameBoard:
         self.old_player = None
         self.current_player = 1
         self.game_finish = False
-        self.movements = []
         self.stones_earned = 0  
         self.second_move = False  
 
@@ -62,7 +61,6 @@ class GameBoard:
             if self.current_player == 1
             else self.bank2.stone_count
         )
-        self.movements.append(start_index)
         current_pit = self.distribute_stones(start_index)
 
         if isinstance(current_pit, Pit) and current_pit.stone_count == 1:
@@ -113,6 +111,7 @@ class GameBoard:
         current_pit.stone_count = 0
 
         while stones_to_distribute > 0:
+            if self.verbose: print("Distributing stones...")
             current_pit: Base = current_pit.next
             if (
                 (current_pit.index == 6 and self.current_player == 1)
@@ -126,38 +125,43 @@ class GameBoard:
         return current_pit
 
     def get_if_opposite_stones(self, last_pit: Pit):
+        opposite_index = 12 - last_pit.index
+
+        if self.node_dict[opposite_index].stone_count == 0:
+            return
+        
         if self.current_player == 1 and last_pit.index in range(0, 6):
-            opposite_index = 12 - last_pit.index
             self.bank1.stone_count += (
                 last_pit.stone_count + self.node_dict[opposite_index].stone_count
             )
             last_pit.stone_count = 0
             self.node_dict[opposite_index].stone_count = 0
+            if self.verbose: print(f"Captured stones from pit {opposite_index}")
         elif self.current_player == 2 and last_pit.index in range(7, 13):
-            opposite_index = 12 - last_pit.index
             self.bank2.stone_count += (
                 last_pit.stone_count + self.node_dict[opposite_index].stone_count
             )
             last_pit.stone_count = 0
             self.node_dict[opposite_index].stone_count = 0
+            if self.verbose: print(f"Captured stones from pit {opposite_index}")
 
     def check_side_empty(self):
         if all(self.node_dict[i].stone_count == 0 for i in range(7, 13)):
+            if self.verbose: print("Player 1 side is empty.")
             self.bank2.stone_count += sum(
                 self.node_dict[i].stone_count for i in range(0, 6)
             )
             for i in range(0, 6):
                 self.node_dict[i].stone_count = 0
             self.game_finish = True
-            self.save()
         elif all(self.node_dict[i].stone_count == 0 for i in range(0, 6)):
+            if self.verbose: print("Player 2 side is empty.")
             self.bank1.stone_count += sum(
                 self.node_dict[i].stone_count for i in range(7, 13)
             )
             for i in range(7, 13):
                 self.node_dict[i].stone_count = 0
             self.game_finish = True
-            self.save()
 
     def play(self, pit_index, player=None):
         if player is not self.current_player and player is not None:
@@ -174,11 +178,6 @@ class GameBoard:
             return True
         print("Invalid pit selection")
         return False
-
-    def save(self, filename="game_history.txt"):
-        with open(filename, "a") as file:
-            file.write(f"{self.movements}\n")
-        print(f"Game saved: {filename}")
 
     def display_board(self):
         print(f"Player {self.current_player}'s turn")
@@ -226,7 +225,9 @@ class GameBoard:
             return [i for i in range(0, 6) if self.node_dict[i].stone_count > 0]
         else:
             return [i for i in range(7, 13) if self.node_dict[i].stone_count > 0]
-
-board = GameBoard()
-board.initialize()
-print(board.get_status())
+        
+    def get_final_score(self, player):
+        if player == 1:
+            return self.bank1.stone_count
+        else:
+            return self.bank2.stone_count
