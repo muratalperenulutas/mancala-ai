@@ -198,17 +198,42 @@ class GameBoard:
         print()
 
     def get_status(self):
-        array = []
+        board_state = []
         for i in range(0, 14):
-            array.append(self.node_dict[i].stone_count)
-        array.append(self.current_player)
+            board_state.append(self.node_dict[i].stone_count)
+        
+        player = self.current_player
+        
+        my_pits = board_state[0:6] if player == 1 else board_state[7:13]
+        opp_pits = board_state[7:13] if player == 1 else board_state[0:6]
+        my_store = board_state[6] if player == 1 else board_state[13]
+        opp_store = board_state[13] if player == 1 else board_state[6]
+        
+        store_diff = my_store - opp_store
+        total_stones_my_side = sum(my_pits)
+        total_stones_opp_side = sum(opp_pits)
+        
+        empty_pits_my = sum(1 for p in my_pits if p == 0)
+        empty_pits_opp = sum(1 for p in opp_pits if p == 0)
+        
+        extra_turn_potential = sum(1 for i, stones in enumerate(my_pits) if stones == i + 1)
+        
+        array = board_state.copy()
+        array.append(player)
         array.append(1 if self.game_finish else 0)
+        array.extend([
+            store_diff, total_stones_my_side, total_stones_opp_side,
+            empty_pits_my, empty_pits_opp, extra_turn_potential
+        ])
+        
         return array
 
     def get_score(self):
         score = 0
-        score += self.stones_earned / 10
-        score += 0.2 if self.second_move else 0
+        score += self.stones_earned / 2
+        score += 0.3 if self.second_move else 0
+        pits_range = range(0, 6) if self.current_player == 1 else range(7, 13)
+        score += sum(self.node_dict[i].stone_count for i in pits_range) * 0.01
         if self.game_finish:
             if self.old_player == 1 and self.bank1.stone_count > self.bank2.stone_count:
                 score += 1
