@@ -26,6 +26,13 @@ class Config:
     BATCH_SIZE = 32
     SAVE_FREQUENCY = 5000
 
+    # PPO specific (for Actor-Critic)
+    PPO_HIDDEN_SIZE = 128
+    PPO_LR = 3e-4
+    PPO_N_STEPS = 2048
+    PPO_TOTAL_TIMESTEPS = 200_000
+
+
 
 
 

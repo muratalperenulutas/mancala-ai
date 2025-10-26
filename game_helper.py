@@ -1,4 +1,6 @@
 from game.game import Game
+from configs import Config
+import numpy as np
 class GameHelper:
     @staticmethod
     def action_to_board_index(action, current_player):
@@ -16,18 +18,18 @@ class GameHelper:
             return b 
 
     @staticmethod
-    def play_against_model(game: Game, model):
+    def play_against_model(game: Game, model, mode='dqn'):
+        from model_helper import ModelHelper
         game.reset()
         game.initialize()
         print("Game started!")
         while not game.game_finish:
-            state = game.get_status()
-            player = state[14]
+            state = game.get_board()
+            player = game.current_player
             game.print_board()
-            #print("Board state:", state)
             legal_actions = game.get_playable_pits()
             print("Playable moves:", legal_actions)
-            if player == 1:
+            if player == 0:
                 while True:
                     try:
                         user_action = int(input("Enter your move (pit index): "))
@@ -37,19 +39,31 @@ class GameHelper:
                             print("Invalid move! Playable moves are:", legal_actions)
                     except ValueError:
                         print("Please enter a valid number.")
-                game.play(user_action, player)
+                game.play(user_action)
                 print(f"Your move: {user_action}")
             else:
-                state_input = np.array(state).reshape(1, 22)
-                q_values = model.predict(state_input, verbose=0)[0]
-                best_action_index = np.argmax(q_values[legal_actions])
-                action = legal_actions[best_action_index]
-                game.play(action, player)
+                features = ModelHelper.build_features(game.get_board(), player, game.game_finish)
+                normalized_state = ModelHelper.normalize_single_fixed(features)
+
+                state_input = np.array(normalized_state).reshape(1, Config.INPUT_FEATURES)
+                if mode == 'ppo':
+                    logits, _ = model.predict(state_input, verbose=0)
+                    q_values = logits[0]
+                elif mode == 'dqn':
+                    q_values = model.predict(state_input, verbose=0)[0]
+
+                canonical_legal = [a - 7 for a in legal_actions if 7 <= a <= 12]
+
+                legal_q_values = [q_values[a] for a in canonical_legal]
+
+                best_action_index = np.argmax(legal_q_values)
+                action = canonical_legal[best_action_index]
+                game.play(GameHelper.action_to_board_index(action, player))
                 print(f"Model's move: {action}")
 
         print("Game finished!")
-        score_p1 = GameHelper.get_final_score(board=game.get_board(), player=1)
-        score_p2 = GameHelper.get_final_score(board=game.get_board(), player=2)
+        score_p1 = GameHelper.get_final_score(game=game, player=0)
+        score_p2 = GameHelper.get_final_score(game=game, player=1)
         print(f"Your score: {score_p1}")
         print(f"Model's score: {score_p2}")
         if score_p1 > score_p2:
