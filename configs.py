@@ -1,0 +1,31 @@
+class Config:
+    LARGE_NEG = -1e9
+    EPS = 1e-12
+
+    K = 5
+    EPSILON_START = 1.0
+    EPSILON_END = 0.05
+    EPSILON_DECAY_STEPS = 200
+    FIXED_TOTAL = 48.0
+    REPLAY_BUFFER_SIZE = 10000
+    GAMMA = 0.99
+    GAME_COUNT = 100
+
+    #score weights
+    STONES_EARNED_WEIGHT = 0.5
+    SECOND_MOVE_WEIGHT = 0.3
+    PIT_STONES_WEIGHT = 0.01
+    WIN_REWARD = 1.0
+    DRAW_REWARD = 0.4
+
+    # Model architecture
+    INPUT_FEATURES = 20
+    HIDDEN_LAYERS = [64, 128, 64]
+    NUM_ACTIONS = 6
+    LEARNING_RATE = 0.001
+    BATCH_SIZE = 32
+    SAVE_FREQUENCY = 5000
+
+
+
+

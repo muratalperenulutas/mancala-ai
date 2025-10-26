@@ -1,4 +1,4 @@
-from base import Base
+from .base import Base
 
 class Pit(Base):
     def __init__(self, index):

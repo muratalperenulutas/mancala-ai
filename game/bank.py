@@ -1,4 +1,4 @@
-from base import Base
+from .base import Base
 
 class Bank(Base):
     def __init__(self, index):
