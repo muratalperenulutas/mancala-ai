@@ -18,13 +18,20 @@ class GameHelper:
             return b 
 
     @staticmethod
-    def play_against_model(game: Game, model, mode='dqn'):
+    def play_against_model(game: Game, model):
+        num_outputs = len(model.outputs)
+        if num_outputs == 1:
+            mode = 'dqn'
+        elif num_outputs == 2:
+            mode = 'ppo'
+        else:
+            raise ValueError("Model output structure not recognized.")
+        
         from model_helper import ModelHelper
         game.reset()
         game.initialize()
         print("Game started!")
         while not game.game_finish:
-            state = game.get_board()
             player = game.current_player
             game.print_board()
             legal_actions = game.get_playable_pits()
@@ -36,7 +43,7 @@ class GameHelper:
                         if user_action in legal_actions:
                             break
                         else:
-                            print("Invalid move! Playable moves are:", legal_actions)
+                            print(f"Invalid move ({user_action})! Playable moves are: {legal_actions}")
                     except ValueError:
                         print("Please enter a valid number.")
                 game.play(user_action)
@@ -49,6 +56,8 @@ class GameHelper:
                 if mode == 'ppo':
                     logits, _ = model.predict(state_input, verbose=0)
                     q_values = logits[0]
+                    #print(f"Logits: {logits}")
+                    #print(f"Q-values: {q_values}")
                 elif mode == 'dqn':
                     q_values = model.predict(state_input, verbose=0)[0]
 
