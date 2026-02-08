@@ -1,26 +1,24 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
-
+import os
+import sys
 from utils.model_helper import ModelHelper
 from utils.game_helper import GameHelper
 from game.game import Game
 
-# In[2]:
+def main():
+    model_path = 'models/mancala_model_iter_1876.keras'
+    
+    if not os.path.exists(model_path):
+        print(f"Error: Model file not found at {model_path}")
+        print("Please ensure you have a trained model in the models/ directory.")
+        return
 
+    model = ModelHelper.load_model(model_path)
+    model.summary()
 
-model=ModelHelper.load_model('mancala_model_iter_1876.keras')
-model.summary()
+    game = Game()
+    game.initialize()
 
-# In[3]:
+    GameHelper.play_against_model(model=model, game=game)
 
-
-game=Game()
-game.initialize()
-
-# In[ ]:
-
-
-GameHelper.play_against_model(model=model, game=game)
+if __name__ == "__main__":
+    main()

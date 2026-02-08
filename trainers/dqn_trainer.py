@@ -8,6 +8,7 @@ from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.optimizers import Adam
 from utils.game_helper import GameHelper
 from utils.model_helper import ModelHelper
+from utils.board_utils import BoardUtils
 from game.game import Game
 from utils.configs import Config
 
@@ -140,7 +141,7 @@ class DqnTrainer:
                     masked_q[legal_actions] = q_values[legal_actions]
                     action = int(np.argmax(masked_q))
 
-                board_index = GameHelper.action_to_board_index(action, game.current_player)
+                board_index = BoardUtils.action_to_board_index(action, game.current_player)
                 game.play(board_index)
                 step_count += 1
 

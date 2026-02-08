@@ -1,19 +1,17 @@
 import numpy as np
 import tensorflow as tf
-
-LARGE_NEG = -1e9
-EPS = 1e-12
+from utils.configs import Config
 
 def mask_logits(logits, legal_mask):
     legal = np.array(legal_mask, dtype=logits.dtype)
-    return logits * legal + (1.0 - legal) * LARGE_NEG
+    return logits * legal + (1.0 - legal) * Config.LARGE_NEG
 
 def probs_from_logits(masked_logits):
     exp = np.exp(masked_logits - np.max(masked_logits, axis=1, keepdims=True))
-    return exp / (np.sum(exp, axis=1, keepdims=True) + EPS)
+    return exp / (np.sum(exp, axis=1, keepdims=True) + Config.EPS)
 
 def entropy_from_probs(probs):
-    return -np.sum(probs * np.log(probs + EPS), axis=1)
+    return -np.sum(probs * np.log(probs + Config.EPS), axis=1)
 
 def debug_single_batch(model, states, legal_mask, y_onehot=None):
     logits = model.predict(states, verbose=0)  # (B,6)

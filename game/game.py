@@ -174,50 +174,6 @@ class Game:
         print("Invalid pit selection")
         return False
 
-    @staticmethod
-    def play_against_model(board, model):
-        board.reset()
-        board.initialize()
-        print("Game started!")
-        while not board.game_finish:
-            state = board.get_status()
-            player = state[14]
-            board.print_board()
-            #print("Board state:", state)
-            legal_actions = board.get_playable_pits()
-            print("Playable moves:", legal_actions)
-            if player == 1:
-                while True:
-                    try:
-                        user_action = int(input("Enter your move (pit index): "))
-                        if user_action in legal_actions:
-                            break
-                        else:
-                            print("Invalid move! Playable moves are:", legal_actions)
-                    except ValueError:
-                        print("Please enter a valid number.")
-                board.play(user_action, player)
-                print(f"Your move: {user_action}")
-            else:
-                state_input = np.array(state).reshape(1, 22)
-                q_values = model.predict(state_input, verbose=0)[0]
-                best_action_index = np.argmax(q_values[legal_actions])
-                action = legal_actions[best_action_index]
-                board.play(action, player)
-                print(f"Model's move: {action}")
-
-        print("Game finished!")
-        score_p1 = board.get_final_score(player=1)
-        score_p2 = board.get_final_score(player=2)
-        print(f"Your score: {score_p1}")
-        print(f"Model's score: {score_p2}")
-        if score_p1 > score_p2:
-            print("You win!")
-        elif score_p2 > score_p1:
-            print("Model wins!")
-        else:
-            print("Draw!")
-
     def display_board(self):
         print(f"Player {self.current_player}'s turn")
         self.print_board()

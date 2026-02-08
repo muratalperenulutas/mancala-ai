@@ -1,22 +1,10 @@
 from game.game import Game
 from utils.configs import Config
+from utils.board_utils import BoardUtils
+from utils.model_helper import ModelHelper
 import numpy as np
+
 class GameHelper:
-    @staticmethod
-    def action_to_board_index(action, current_player):
-        if current_player == 0:
-            return action
-        else:
-            return action + 7
-
-    @staticmethod
-    def canonicalize_board(board14, player):
-        b = list(board14)
-        if player == 2:
-            return b[7:14] + b[0:7]
-        else:
-            return b 
-
     @staticmethod
     def play_against_model(game: Game, model):
         num_outputs = len(model.outputs)
@@ -27,7 +15,6 @@ class GameHelper:
         else:
             raise ValueError("Model output structure not recognized.")
         
-        from utils.model_helper import ModelHelper
         game.reset()
         game.initialize()
         print("Game started!")
@@ -67,7 +54,7 @@ class GameHelper:
 
                 best_action_index = np.argmax(legal_q_values)
                 action = canonical_legal[best_action_index]
-                game.play(GameHelper.action_to_board_index(action, player))
+                game.play(BoardUtils.action_to_board_index(action, player))
                 print(f"Model's move: {action}")
 
         print("Game finished!")
@@ -86,19 +73,19 @@ class GameHelper:
     @staticmethod
     def get_move_score(game: Game):
         score = 0
-        score += game.stones_earned / 2
-        score += 0.3 if game.second_move else 0
+        score += game.stones_earned * Config.STONES_EARNED_WEIGHT
+        score += Config.SECOND_MOVE_WEIGHT if game.second_move else 0
         pits_range = range(0, 6) if game.current_player == 0 else range(7, 13)
-        score += sum(game.node_dict[i].stone_count for i in pits_range) * 0.01
+        score += sum(game.node_dict[i].stone_count for i in pits_range) * Config.PIT_STONES_WEIGHT
         if game.game_finish:
             if game.old_player == 0 and game.bank1.stone_count > game.bank2.stone_count:
-                score += 1
+                score += Config.WIN_REWARD
             elif game.old_player == 1 and game.bank2.stone_count > game.bank1.stone_count:
-                score += 1
+                score += Config.WIN_REWARD
             elif game.bank1.stone_count == game.bank2.stone_count:
-                score += 0.4
+                score += Config.DRAW_REWARD
             else:
-                score += -1
+                score += -Config.WIN_REWARD
         return score
 
     @staticmethod

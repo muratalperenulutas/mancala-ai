@@ -2,7 +2,7 @@ import sys
 import datetime
 from utils.configs import Config
 import numpy as np
-from utils.game_helper import GameHelper
+from utils.board_utils import BoardUtils
 import random
 from tensorflow.keras.saving import save_model
 from tensorflow.keras.models import load_model
@@ -38,7 +38,7 @@ class ModelHelper:
 
     @staticmethod
     def build_features(board14, player, game_finish):
-        can_board = GameHelper.canonicalize_board(board14, player)
+        can_board = BoardUtils.canonicalize_board(board14, player)
         extras = [
             can_board[7] - can_board[0],  
             sum(can_board[0:7]),         

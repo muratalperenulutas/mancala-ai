@@ -5,6 +5,7 @@ from tensorflow.keras.layers import Dense
 from utils.configs import Config
 from utils.model_helper import ModelHelper
 from utils.game_helper import GameHelper
+from utils.board_utils import BoardUtils
 
 
 class PPOConfig:
@@ -190,7 +191,7 @@ class PPOTrainer:
             action = int(action_tf.numpy()[0])
             log_prob = float(tf.math.log(probs_tf[0, action] + PPOConfig.EPS).numpy())
 
-            board_index = GameHelper.action_to_board_index(action, player)
+            board_index = BoardUtils.action_to_board_index(action, player)
             game.play(board_index)
 
             reward = GameHelper.get_move_score(game)
