@@ -5,77 +5,64 @@ from game.game import Game
 class TestGame(unittest.TestCase):
 
     def setUp(self):
-        self.board = Game()
-        self.board.initialize()
+        self.game = Game()
 
     def test_initialization(self):
-        for i in range(14):
-            if i == 6 or i == 13:
-                self.assertEqual(self.board.node_dict[i].stone_count, 0)
-            else:
-                self.assertEqual(self.board.node_dict[i].stone_count, 4)
+        self.game = Game()
 
     def test_player1_simple_move(self):
-        self.board.play(0)
-        self.assertEqual(self.board.node_dict[0].stone_count, 0)
-        self.assertEqual(self.board.node_dict[1].stone_count, 5)
-        self.assertEqual(self.board.node_dict[2].stone_count, 5)
-        self.assertEqual(self.board.node_dict[3].stone_count, 5)
-        self.assertEqual(self.board.node_dict[4].stone_count, 5)
-        self.assertEqual(self.board.current_player, 1)
+        self.game.play(0)
+        self.assertEqual(self.game.board[0], 1)
+        self.assertEqual(self.game.board[1], 5)
+        self.assertEqual(self.game.board[2], 5)
+        self.assertEqual(self.game.board[3], 5)
+        self.assertEqual(self.game.current_player, 1)
 
     def test_player2_simple_move(self):
 
-        self.board.current_player = 1
+        self.game.current_player = 1
 
-        self.board.play(7)
+        self.game.play(7)
 
-        self.assertEqual(self.board.node_dict[7].stone_count, 0)
+        self.assertEqual(self.game.board[7], 1)
+        self.assertEqual(self.game.board[8], 5)
+        self.assertEqual(self.game.board[9], 5)
+        self.assertEqual(self.game.board[10], 5)
 
-        self.assertEqual(self.board.node_dict[8].stone_count, 5)
-        self.assertEqual(self.board.node_dict[9].stone_count, 5)
-        self.assertEqual(self.board.node_dict[10].stone_count, 5)
-        self.assertEqual(self.board.node_dict[11].stone_count, 5)
-
-        self.assertEqual(self.board.current_player, 0)
+        self.assertEqual(self.game.current_player, 0)
 
     def test_player1_lands_in_own_bank(self):
-        self.board.node_dict[2].stone_count = 4
-        self.board.play(2)
-        self.assertEqual(self.board.node_dict[2].stone_count, 0)
-        self.assertEqual(self.board.bank1.stone_count, 1)
-        self.assertEqual(self.board.current_player, 0)
+        self.game.play(3)
+        self.assertEqual(self.game.board[3], 1)
+        self.assertEqual(self.game.board[self.game.bank0i], 1)
+        self.assertEqual(self.game.current_player, 0)
 
     def test_player2_lands_in_own_bank(self):
-        self.board.current_player = 1
-        self.board.node_dict[9].stone_count = 4
-        self.board.play(9)
-        self.assertEqual(self.board.node_dict[9].stone_count, 0)
+        self.game.current_player = 1
+        self.game.play(10)
+        self.assertEqual(self.game.board[10], 1)
 
-        self.assertEqual(self.board.bank2.stone_count, 1)
-
-        self.assertEqual(self.board.current_player, 1)
+        self.assertEqual(self.game.board[self.game.bank1i], 1)
+        self.assertEqual(self.game.current_player, 1)
 
     def test_player1_capture(self):
+        self.game.board[3] = 1
+        self.game.board[4] = 0
+        self.game.board[8] = 5
+        self.game.play(3)
 
-        self.board.node_dict[3].stone_count = 1
-        self.board.node_dict[4].stone_count = 0
-        self.board.node_dict[8].stone_count = 5
-        self.board.play(3)
+        self.assertEqual(self.game.board[3], 0)
+        self.assertEqual(self.game.board[8], 0)
 
-        self.assertEqual(self.board.node_dict[3].stone_count, 0)
-        self.assertEqual(self.board.node_dict[8].stone_count, 0)
-
-        self.assertEqual(self.board.bank1.stone_count, 6)
+        self.assertEqual(self.game.board[self.game.bank0i], 6)
 
     def test_game_over(self):
         for i in range(0, 5):
-            self.board.node_dict[i].stone_count = 0
-        self.board.node_dict[5].stone_count = 1
-        self.board.current_player = 0
-        self.board.play(5)
+            self.game.board[i] = 0
+        self.game.board[5] = 1
+        self.game.current_player = 0
+        self.game.play(5)
 
-        self.assertTrue(self.board.game_finish)
-
+        self.assertTrue(self.game.game_finish)
 if __name__ == "__main__":
     unittest.main()

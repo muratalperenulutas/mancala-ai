@@ -1,174 +1,122 @@
-from .bank import Bank
-from .base import Base
-from .pit import Pit
-from typing import Dict
-
+PIT_SIZE = 6
+PIT_STONES = 4
+TOTAL_PITS = 2 * PIT_SIZE + 2
 
 class Game:
-    def __init__(self,verbose=False):
-        self.linked_node_start = None
-        self.node_dict: Dict[str, Base] = {}
-        self.bank1 = None
-        self.bank2 = None
-        self.old_stone_count = 0
-        self.old_player = None
+    def __init__(self):
+        self.board=[]
         self.current_player = 0
+        self.bank0i = PIT_SIZE
+        self.bank1i = TOTAL_PITS-1
         self.game_finish = False
+        self.old_stone_count = 0
         self.stones_earned = 0
         self.second_move = False
-        self.verbose = verbose
-        
-    def reset(self):
-        self.linked_node_start = None
-        self.node_dict = {}
-        self.bank1 = None
-        self.bank2 = None
-        self.old_stone_count = 0
-        self.old_player = None
-        self.current_player = 0
-        self.game_finish = False
-        self.stones_earned = 0  
-        self.second_move = False  
 
-    def initialize(self):
-        last_node = None
-        for x in range(14):
-            if x == 6:
-                node = Bank(x)
-                self.bank1 = node
-            elif x == 13:
-                node = Bank(x)
-                self.bank2 = node
+        for x in range(TOTAL_PITS):
+            if x == PIT_SIZE or x == TOTAL_PITS - 1:
+                self.board.append(0)
             else:
-                node = Pit(x)
+                self.board.append(PIT_STONES)
 
-            self.node_dict[node.index] = node
-
-            if self.linked_node_start is None:
-                self.linked_node_start = node
-            else:
-                last_node.next = node
-            if x == 13:
-                node.next = self.linked_node_start
-
-            last_node = node
-
-    def move_stones(self, start_index):
+    def move_stones(self, index):
         self.stones_earned = 0
-        self.old_player = self.current_player
         self.old_stone_count = (
-            self.bank1.stone_count
+            self.board[self.bank0i]
             if self.current_player == 0
-            else self.bank2.stone_count
+            else self.board[self.bank1i]
         )
-        current_pit = self.distribute_stones(start_index)
+        last_idx = self.distribute_stones(index)
 
-        if isinstance(current_pit, Pit) and current_pit.stone_count == 1:
-            self.get_if_opposite_stones(current_pit)
-
-        self.take_stones_if_even(start_index, current_pit)
+        if last_idx is not self.bank0i and last_idx is not self.bank1i :
+            self.get_if_opposite_stones(last_idx)    
+            self.take_stones_if_even(last_idx)
 
         self.check_side_empty() 
 
         self.stones_earned = (
-            self.bank1.stone_count
+            self.board[self.bank0i]
             if self.current_player == 0
-            else self.bank2.stone_count
+            else self.board[self.bank1i]
         ) - self.old_stone_count
 
-        if self.current_player == 0 and current_pit.index == 6:
+        if last_idx == self.bank0i or last_idx == self.bank1i:
             self.second_move = True
-        elif self.current_player == 1 and current_pit.index == 13:
-            self.second_move = True
-        elif self.current_player == 0:
-            self.current_player = 1
         else:
-            self.current_player = 0
+            self.current_player = 1 - self.current_player
+            self.second_move = False
+
+    def distribute_stones(self, index):
+        stones = self.board[index]
+        if stones == 1:
+            self.board[index] = 0
+            self.board[index+1] += 1
+            return index+1
+        
+        self.board[index] = 1
+        stones -= 1
+        
+        while stones > 0:
+            index = (index + 1) % TOTAL_PITS
+            if (index == self.bank0i and self.current_player == 1) or (index == self.bank1i and self.current_player == 0):
+                continue
+            self.board[index] += 1
+            stones -= 1
+        return index        
    
-
-    def take_stones_if_even(self, start_index, current_pit: Base):
-        if (
-            start_index in range(0, 6)
-            and current_pit.index in range(7, 13)
-            and current_pit.stone_count % 2 == 0
-        ):
-            self.bank1.stone_count += current_pit.stone_count
-            current_pit.stone_count = 0
-
-        elif (
-            start_index in range(7, 13)
-            and current_pit.index in range(0, 6)
-            and current_pit.stone_count % 2 == 0
-        ):
-            self.bank2.stone_count += current_pit.stone_count
-            current_pit.stone_count = 0
-
-    def distribute_stones(self, start_index):
-        current_pit = self.node_dict[start_index]
-        stones_to_distribute = current_pit.stone_count
-        current_pit.stone_count = 0
-
-        while stones_to_distribute > 0:
-            if self.verbose: print("Distributing stones...")
-            current_pit: Base = current_pit.next
+    def take_stones_if_even(self, current_index):
+        if self.board[current_index] % 2 == 0:
             if (
-                (current_pit.index == 6 and self.current_player == 0)
-                or (current_pit.index == 13 and self.current_player == 1)
-            ) or (
-                not (current_pit.index == 6 and self.current_player == 0)
-                and not (current_pit.index == 13 and self.current_player == 1)
+                self.current_player == 0
+                and self.is_p1_side(current_index)
+            )or (
+                self.current_player == 1
+                and self.is_p0_side(current_index)
             ):
-                current_pit.stone_count += 1
-                stones_to_distribute -= 1
-        return current_pit
+                bank= self.bank0i if self.current_player == 0 else self.bank1i
+                self.board[bank] += self.board[current_index]
+                self.board[current_index] = 0
 
-    def get_if_opposite_stones(self, last_pit: Pit):
-        opposite_index = 12 - last_pit.index
+    def is_p0_side(self, index):return 0 <= index < PIT_SIZE
+    def is_p1_side(self, index):return PIT_SIZE < index < TOTAL_PITS - 1            
 
-        if self.node_dict[opposite_index].stone_count == 0:
+    def get_if_opposite_stones(self, index):
+        if self.board[index] != 1:
+            return
+        opposite_index =TOTAL_PITS-2 - index
+
+        if self.board[opposite_index] == 0:
             return
         
-        if self.current_player == 0 and last_pit.index in range(0, 6):
-            self.bank1.stone_count += (
-                last_pit.stone_count + self.node_dict[opposite_index].stone_count
+        if (self.current_player == 0 and self.is_p0_side(index)) or (self.current_player == 1 and self.is_p1_side(index)):
+            banki= self.bank0i if self.current_player == 0 else self.bank1i
+            self.board[banki] += (
+                self.board[index] + self.board[opposite_index]
             )
-            last_pit.stone_count = 0
-            self.node_dict[opposite_index].stone_count = 0
-            if self.verbose: print(f"Captured stones from pit {opposite_index}")
-        elif self.current_player == 1 and last_pit.index in range(7, 13):
-            self.bank2.stone_count += (
-                last_pit.stone_count + self.node_dict[opposite_index].stone_count
-            )
-            last_pit.stone_count = 0
-            self.node_dict[opposite_index].stone_count = 0
-            if self.verbose: print(f"Captured stones from pit {opposite_index}")
-
+            self.board[index] = 0
+            self.board[opposite_index] = 0
     def check_side_empty(self):
-        if all(self.node_dict[i].stone_count == 0 for i in range(7, 13)):
-            if self.verbose: print("Player 1 side is empty.")
-            self.bank2.stone_count += sum(
-                self.node_dict[i].stone_count for i in range(0, 6)
-            )
-            for i in range(0, 6):
-                self.node_dict[i].stone_count = 0
-            self.game_finish = True
-        elif all(self.node_dict[i].stone_count == 0 for i in range(0, 6)):
-            if self.verbose: print("Player 2 side is empty.")
-            self.bank1.stone_count += sum(
-                self.node_dict[i].stone_count for i in range(7, 13)
-            )
-            for i in range(7, 13):
-                self.node_dict[i].stone_count = 0
+        p0_side= sum(self.board[0:PIT_SIZE])
+        p1_side= sum(self.board[PIT_SIZE+1:TOTAL_PITS-1])
+        if p0_side == 0 or p1_side == 0:
+            self.board[self.bank0i] += p1_side
+            self.board[self.bank1i] += p0_side
+            for i in range(TOTAL_PITS):
+                if i != self.bank0i and i != self.bank1i:
+                    self.board[i] = 0
             self.game_finish = True
 
-    def play(self, pit_index):
-        if self.node_dict[pit_index].stone_count == 0:
+    def play(self, pit_index, symmetry=False):
+        if symmetry:
+            self.move_stones(pit_index)
+            return True 
+        if self.board[pit_index] == 0:
             print("Pit is empty")
             return False
-        if self.current_player == 0 and pit_index in range(0, 6):
+        if self.current_player == 0 and self.is_p0_side(pit_index):
             self.move_stones(pit_index)
             return True
-        elif self.current_player == 1 and pit_index in range(7, 13):
+        elif self.current_player == 1 and self.is_p1_side(pit_index):
             self.move_stones(pit_index)
             return True
         print("Invalid pit selection")
@@ -176,28 +124,31 @@ class Game:
 
     def display_board(self):
         print(f"Player {self.current_player}'s turn")
-        self.print_board()
-
-    def print_board(self):
         print("      ", end="")
         for i in range(12, 6, -1):
-            print(f"[{self.node_dict[i].stone_count}]", end=" ")
+            print(f"[{self.board[i]}]", end=" ")
         print()
-        print(f"[{self.bank2.stone_count}] ", end="")
+        print(f"[{self.board[self.bank1i]}] ", end="")
         print(" " * 28, end="")
-        print(f"[{self.bank1.stone_count}]")
+        print(f"[{self.board[self.bank0i]}]")
         print("      ", end="")
         for i in range(0, 6):
-            print(f"[{self.node_dict[i].stone_count}]", end=" ")
+            print(f"[{self.board[i]}]", end=" ")
         print()
         print()
 
-    def get_board(self):
-        return [self.node_dict[i].stone_count for i in range(14)]
+    def get_board(self, symmetry=False):
+        if symmetry:
+            if self.current_player == 0:
+                return self.board.copy()
+            else:
+                return self.board[PIT_SIZE + 1:TOTAL_PITS - 1] + self.board[0:PIT_SIZE]
+        return self.board.copy()
 
-
-    def get_playable_pits(self):
+    def get_playable_pits(self,symmetry=False):
         if self.current_player == 0:
-            return [i for i in range(0, 6) if self.node_dict[i].stone_count > 0]
+            return [i for i in range(0, PIT_SIZE) if self.board[i] > 0]
         else:
-            return [i for i in range(7, 13) if self.node_dict[i].stone_count > 0]     
+            if symmetry:
+                return [i - (PIT_SIZE + 1) for i in range(PIT_SIZE + 1, TOTAL_PITS - 1) if self.board[i] > 0]
+            return [i for i in range(PIT_SIZE + 1, TOTAL_PITS - 1) if self.board[i] > 0]     
