@@ -1,14 +1,16 @@
-class Config:
+class Constant:
     LARGE_NEG = -1e9
     EPS = 1e-12
-
+    GAMMA = 0.99
+    
+class Config:
     K = 5
     EPSILON_START = 1.0
     EPSILON_END = 0.05
+
     EPSILON_DECAY_STEPS = 200
     FIXED_TOTAL = 48.0
     REPLAY_BUFFER_SIZE = 10000
-    GAMMA = 0.99
     GAME_COUNT = 100
 
     #score weights
@@ -23,16 +25,25 @@ class Config:
     HIDDEN_LAYERS = [64, 128, 64]
     NUM_ACTIONS = 6
     LEARNING_RATE = 0.001
-    BATCH_SIZE = 32
     SAVE_FREQUENCY = 5000
 
-    # PPO specific (for Actor-Critic)
-    PPO_HIDDEN_SIZE = 128
-    PPO_LR = 3e-4
-    PPO_N_STEPS = 2048
-    PPO_TOTAL_TIMESTEPS = 200_000
+class DQNConfig:
+    BATCH_SIZE = 64
+    TRAIN_EVERY = 4
+    UPDATE_TARGET_EVERY = 1000
 
-
+class PPOConfig:
+    GAE_LAMBDA = 0.95
+    CLIP_RATIO = 0.2
+    ENTROPY_COEF = 0.01
+    VALUE_COEF = 0.5
+    MAX_GRAD_NORM = 0.5
+    N_EPOCHS = 4
+    BATCH_SIZE = 64
+    HIDDEN_SIZE = 32
+    LR = 3e-4
+    N_STEPS = 2048
+    TOTAL_TIMESTEPS = 50_000
 
 
 

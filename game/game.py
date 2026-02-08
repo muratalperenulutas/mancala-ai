@@ -108,10 +108,11 @@ class Game:
 
     def play(self, pit_index, symmetry=False):
         if symmetry:
+            if self.current_player == 1:
+                pit_index += PIT_SIZE + 1
             self.move_stones(pit_index)
             return True 
         if self.board[pit_index] == 0:
-            print("Pit is empty")
             return False
         if self.current_player == 0 and self.is_p0_side(pit_index):
             self.move_stones(pit_index)
@@ -119,7 +120,6 @@ class Game:
         elif self.current_player == 1 and self.is_p1_side(pit_index):
             self.move_stones(pit_index)
             return True
-        print("Invalid pit selection")
         return False
 
     def display_board(self):
@@ -142,7 +142,7 @@ class Game:
             if self.current_player == 0:
                 return self.board.copy()
             else:
-                return self.board[PIT_SIZE + 1:TOTAL_PITS - 1] + self.board[0:PIT_SIZE]
+                return self.board[PIT_SIZE + 1:TOTAL_PITS] + self.board[0:PIT_SIZE+1]
         return self.board.copy()
 
     def get_playable_pits(self,symmetry=False):

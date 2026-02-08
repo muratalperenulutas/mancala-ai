@@ -2,28 +2,14 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Model, Input
 from tensorflow.keras.layers import Dense
-from utils.configs import Config
+from game.game import Game
+from utils.configs import Config,PPOConfig,Constant
 from utils.model_helper import ModelHelper
 from utils.game_helper import GameHelper
-from utils.board_utils import BoardUtils
 
 
-class PPOConfig:
-    LR = 3e-4
-    GAMMA = 0.99
-    GAE_LAMBDA = 0.95
-    CLIP_RATIO = 0.2
-    ENTROPY_COEF = 0.01
-    VALUE_COEF = 0.5
-    MAX_GRAD_NORM = 0.5
-    N_EPOCHS = 4
-    BATCH_SIZE = 64
-    N_STEPS = 2048
-    LARGE_NEG = -1e9
-    EPS = 1e-8
 
-
-def build_actor_critic_model(input_dim=Config.INPUT_FEATURES, hidden=128):
+def build_actor_critic_model(input_dim=Config.INPUT_FEATURES, hidden=PPOConfig.HIDDEN_SIZE):
     inp = Input(shape=(input_dim,), name="state")
     x = Dense(hidden, activation="relu", name="shared1")(inp)
     x = Dense(hidden, activation="relu", name="shared2")(x)
@@ -34,13 +20,13 @@ def build_actor_critic_model(input_dim=Config.INPUT_FEATURES, hidden=128):
 
 def mask_logits_tf(logits, legal_mask):
     legal = tf.cast(legal_mask, logits.dtype)
-    return logits * legal + (1.0 - legal) * PPOConfig.LARGE_NEG
+    return logits * legal + (1.0 - legal) * Constant.LARGE_NEG
 
 
 def sample_action(masked_logits):
     probs = tf.nn.softmax(masked_logits, axis=-1)
     action = tf.squeeze(
-        tf.random.categorical(tf.math.log(probs + PPOConfig.EPS), 1), axis=-1
+        tf.random.categorical(tf.math.log(probs + Constant.EPS), 1), axis=-1
     )
     return action, probs
 
@@ -55,7 +41,7 @@ def compute_log_probs(logits, legal_mask, actions):
 
 # GAE (Generalized Advantage Estimation)
 def compute_gae(
-    rewards, values, dones, last_value, gamma=PPOConfig.GAMMA, lam=PPOConfig.GAE_LAMBDA
+    rewards, values, dones, last_value, gamma=Constant.GAMMA, lam=PPOConfig.GAE_LAMBDA
 ):
     T = len(rewards)
     advantages = np.zeros(T, dtype=np.float32)
@@ -73,7 +59,7 @@ def compute_gae(
 
 
 def normalize_advantage(adv):
-    return (adv - np.mean(adv)) / (np.std(adv) + 1e-8)
+    return (adv - np.mean(adv)) / (np.std(adv) + Constant.EPS)
 
 
 class PPOTrainer:
@@ -93,7 +79,6 @@ class PPOTrainer:
     def ppo_update_step(
         self, states, legal_masks, actions, old_log_probs, advantages, returns
     ):
-        """Single mini-batch PPO update"""
         with tf.GradientTape() as tape:
             logits, values = self.model(states, training=True)
             values = tf.squeeze(values, axis=1)
@@ -117,7 +102,7 @@ class PPOTrainer:
             masked_logits = mask_logits_tf(logits, legal_masks)
             probs = tf.nn.softmax(masked_logits, axis=-1)
             entropy = -tf.reduce_sum(
-                probs * tf.math.log(probs + PPOConfig.EPS), axis=-1
+                probs * tf.math.log(probs + Constant.EPS), axis=-1
             )
             entropy_loss = -PPOConfig.ENTROPY_COEF * tf.reduce_mean(entropy)
 
@@ -144,118 +129,102 @@ class PPOTrainer:
         }
 
     def collect_rollout(self, game, n_steps=PPOConfig.N_STEPS):
-        states, legal_masks, actions, rewards, dones, values, log_probs = (
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-            [],
-        )
-        ep_rewards = []
-        ep_lengths = []
-        current_ep_reward = 0
-        current_ep_length = 0
+        data = {
+            "states": [], "legal_masks": [], "actions": [],
+            "rewards": [], "dones": [], "values": [], "log_probs": []
+        }
+        ep_stats = {"rewards": [], "lengths": []}
+        curr_reward, curr_length = 0, 0
 
-        game.reset()
-        game.initialize()
-
-        for step in range(n_steps):
+        for _ in range(n_steps):
             player = game.current_player
-            features = ModelHelper.build_features(
-                game.get_board(), player, game.game_finish
-            )
-            normalized_state = ModelHelper.normalize_single_fixed(features)
+            features = ModelHelper.build_features(game)
+            state = ModelHelper.normalize_single_fixed(features)
+            mask = self._get_legal_mask(game)
+            
+            action, log_prob, value = self._get_action_and_value(state, mask)
 
-            legal_actions_indices = game.get_playable_pits()
-            if player == 0:
-                canonical_legal = [a for a in legal_actions_indices if 0 <= a <= 5]
-            else:
-                canonical_legal = [a - 7 for a in legal_actions_indices if 7 <= a <= 12]
-
-            legal_mask = np.zeros(Config.NUM_ACTIONS, dtype=np.float32)
-            legal_mask[canonical_legal] = 1.0
-
-            s_np = np.expand_dims(normalized_state, axis=0).astype(np.float32)
-            mask_np = np.expand_dims(legal_mask, axis=0).astype(np.float32)
-
-            logits_np, value_np = self.model(s_np, training=False)
-            logits_np = logits_np.numpy()[0]
-            value_np = float(value_np.numpy()[0, 0])
-
-            masked_logits_np = np.where(legal_mask, logits_np, PPOConfig.LARGE_NEG)
-            action_tf, probs_tf = sample_action(
-                tf.constant([masked_logits_np], dtype=tf.float32)
-            )
-            action = int(action_tf.numpy()[0])
-            log_prob = float(tf.math.log(probs_tf[0, action] + PPOConfig.EPS).numpy())
-
-            board_index = BoardUtils.action_to_board_index(action, player)
-            game.play(board_index)
-
+            game.play(action, symmetry=True)
             reward = GameHelper.get_move_score(game)
             done = game.game_finish
 
-            states.append(normalized_state)
-            legal_masks.append(legal_mask)
-            actions.append(action)
-            rewards.append(reward)
-            dones.append(float(done))
-            values.append(value_np)
-            log_probs.append(log_prob)
-
-            current_ep_reward += reward
-            current_ep_length += 1
+            self._store_transition(data, state, mask, action, reward, done, value, log_prob)
+            curr_reward += reward
+            curr_length += 1
 
             if done:
-                score_p0 = GameHelper.get_final_score(game=game, player=0)
-                score_p1 = GameHelper.get_final_score(game=game, player=1)
-                if score_p0 > score_p1:
-                    final_reward = 1.0 if player == 0 else -1.0
-                elif score_p0 < score_p1:
-                    final_reward = -1.0 if player == 0 else 1.0
-                else:
-                    final_reward = 0.0
+                self._apply_final_rewards(data, game, player, curr_length)
+                ep_stats["rewards"].append(curr_reward)
+                ep_stats["lengths"].append(curr_length)
+                curr_reward, curr_length = 0, 0
+                game = Game()
 
-                K = Config.K
-                gamma = PPOConfig.GAMMA
-                n_episode = current_ep_length
-                for i in range(max(0, len(rewards) - n_episode), len(rewards)):
-                    steps_from_end = len(rewards) - 1 - i
-                    if steps_from_end < K:
-                        rewards[i] += final_reward * (gamma**steps_from_end)
+        return self._finalize_rollout(data, ep_stats, game)
 
-                ep_rewards.append(current_ep_reward)
-                ep_lengths.append(current_ep_length)
-                current_ep_reward = 0
-                current_ep_length = 0
+    def _get_legal_mask(self, game):
+        mask = np.zeros(Config.NUM_ACTIONS, dtype=np.float32)
+        mask[game.get_playable_pits(symmetry=True)] = 1.0
+        return mask
 
-                game.reset()
-                game.initialize()
+    def _get_action_and_value(self, state, mask):
+        s_tf = tf.convert_to_tensor([state], dtype=tf.float32)
+        logits, value = self.model(s_tf, training=False)
+        
+        masked_logits = tf.where(mask > 0, logits[0], Constant.LARGE_NEG)
+        action_tf, probs_tf = sample_action(tf.expand_dims(masked_logits, 0))
+        
+        action = int(action_tf.numpy()[0])
+        log_prob = float(tf.math.log(probs_tf[0, action] + Constant.EPS).numpy())
+        return action, log_prob, float(value.numpy()[0, 0])
 
-        player = game.current_player
-        features = ModelHelper.build_features(
-            game.get_board(), player, game.game_finish
+    def _store_transition(self, data, s, m, a, r, d, v, lp):
+        data["states"].append(s)
+        data["legal_masks"].append(m)
+        data["actions"].append(a)
+        data["rewards"].append(r)
+        data["dones"].append(float(d))
+        data["values"].append(v)
+        data["log_probs"].append(lp)
+
+    def _apply_final_rewards(self, data, game, player, ep_length):
+        score_p0 = GameHelper.get_final_score(game=game, player=0)
+        score_p1 = GameHelper.get_final_score(game=game, player=1)
+        
+        if score_p0 > score_p1:
+            final_reward = 1.0 if player == 0 else -1.0
+        elif score_p0 < score_p1:
+            final_reward = -1.0 if player == 0 else 1.0
+        else:
+            final_reward = 0.0
+
+        K = Config.K
+        gamma = Constant.GAMMA
+        rewards = data["rewards"]
+        for i in range(1, min(K, ep_length) + 1):
+            rewards[-i] += final_reward * (gamma ** (i - 1))
+
+    def _finalize_rollout(self, data, ep_stats, game):
+        features = ModelHelper.build_features(game)
+        state = ModelHelper.normalize_single_fixed(features)
+        s_tf = tf.convert_to_tensor([state], dtype=tf.float32)
+        _, last_value_tf = self.model(s_tf, training=False)
+        last_value = float(last_value_tf.numpy()[0, 0])
+
+        advantages, returns = compute_gae(
+            data["rewards"], np.array(data["values"], dtype=np.float32), 
+            data["dones"], last_value
         )
-        normalized_state = ModelHelper.normalize_single_fixed(features)
-        s_np = np.expand_dims(normalized_state, axis=0).astype(np.float32)
-        _, last_value_np = self.model(s_np, training=False)
-        last_value = float(last_value_np.numpy()[0, 0])
-
-        values_arr = np.array(values, dtype=np.float32)
-        advantages, returns = compute_gae(rewards, values_arr, dones, last_value)
         advantages = normalize_advantage(advantages)
 
         return {
-            "states": np.array(states, dtype=np.float32),
-            "legal_masks": np.array(legal_masks, dtype=np.float32),
-            "actions": np.array(actions, dtype=np.int32),
-            "old_log_probs": np.array(log_probs, dtype=np.float32),
+            "states": np.array(data["states"], dtype=np.float32),
+            "legal_masks": np.array(data["legal_masks"], dtype=np.float32),
+            "actions": np.array(data["actions"], dtype=np.int32),
+            "old_log_probs": np.array(data["log_probs"], dtype=np.float32),
             "advantages": advantages,
             "returns": returns,
-            "ep_rewards": ep_rewards,
-            "ep_lengths": ep_lengths,
+            "ep_rewards": ep_stats["rewards"],
+            "ep_lengths": ep_stats["lengths"],
         }
 
     def ppo_update(self, rollout_data):
@@ -317,7 +286,7 @@ class PPOTrainer:
         return illegal_before, illegal_after
 
     def train_ppo(
-        self, game, total_timesteps=200_000, n_steps=PPOConfig.N_STEPS, log_interval=1
+        self, game=Game(), total_timesteps=PPOConfig.TOTAL_TIMESTEPS, n_steps=PPOConfig.N_STEPS, log_interval=1
     ):
         timesteps = 0
         iteration = 0
@@ -372,9 +341,9 @@ class PPOTrainer:
                 print(f"  Illegal Before Mask: {il_before:.3f}")
                 print(f"  Illegal After Mask:  {il_after:.3f}")
 
-            if (iteration * n_steps) % Config.SAVE_FREQUENCY == 0:
-                ModelHelper.save_model(self.model, t=iteration)
-                print(f"\nModel saved at iteration {iteration}")
+
+        ModelHelper.save_model(self.model, t=iteration)
+        print(f"\nFinal model saved at iteration {iteration}")
 
         print(f"\n{'=' * 80}")
         print("PPO Training Complete!")
