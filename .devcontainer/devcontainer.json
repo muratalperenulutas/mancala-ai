@@ -1,0 +1,17 @@
+{
+    "name": "Mancala AI Dev",
+    "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+    "features": {},
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "ms-toolsai.jupyter"
+            ],
+            "settings": {}
+        }
+    },
+    "postCreateCommand": "pip install --upgrade pip && pip install --user -r requirements.txt",
+    "remoteUser": "vscode"
+}
