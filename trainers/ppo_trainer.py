@@ -3,30 +3,30 @@ import tensorflow as tf
 from tensorflow.keras import Model, Input
 from tensorflow.keras.layers import Dense
 from game.game import Game
-from utils.configs import Config,PPOConfig,Constant
+from utils.configs import *
 from utils.model_helper import ModelHelper
 from utils.game_helper import GameHelper
 
 
 
-def build_actor_critic_model(input_dim=Config.INPUT_FEATURES, hidden=PPOConfig.HIDDEN_SIZE):
+def build_actor_critic_model(input_dim=INPUT_FEATURES, hidden=HIDDEN_SIZE):
     inp = Input(shape=(input_dim,), name="state")
     x = Dense(hidden, activation="relu", name="shared1")(inp)
     x = Dense(hidden, activation="relu", name="shared2")(x)
-    logits = Dense(Config.NUM_ACTIONS, name="logits")(x)
+    logits = Dense(NUM_ACTIONS, name="logits")(x)
     value = Dense(1, name="value")(x)
     return Model(inputs=inp, outputs=[logits, value])
 
 
 def mask_logits_tf(logits, legal_mask):
     legal = tf.cast(legal_mask, logits.dtype)
-    return logits * legal + (1.0 - legal) * Constant.LARGE_NEG
+    return logits * legal + (1.0 - legal) * LARGE_NEG
 
 
 def sample_action(masked_logits):
     probs = tf.nn.softmax(masked_logits, axis=-1)
     action = tf.squeeze(
-        tf.random.categorical(tf.math.log(probs + Constant.EPS), 1), axis=-1
+        tf.random.categorical(tf.math.log(probs + EPS), 1), axis=-1
     )
     return action, probs
 
@@ -34,14 +34,14 @@ def sample_action(masked_logits):
 def compute_log_probs(logits, legal_mask, actions):
     masked_logits = mask_logits_tf(logits, legal_mask)
     log_probs_all = tf.nn.log_softmax(masked_logits, axis=-1)
-    actions_onehot = tf.one_hot(actions, depth=Config.NUM_ACTIONS)
+    actions_onehot = tf.one_hot(actions, depth=NUM_ACTIONS)
     log_probs = tf.reduce_sum(actions_onehot * log_probs_all, axis=1)
     return log_probs
 
 
 # GAE (Generalized Advantage Estimation)
 def compute_gae(
-    rewards, values, dones, last_value, gamma=Constant.GAMMA, lam=PPOConfig.GAE_LAMBDA
+    rewards, values, dones, last_value, gamma=GAMMA, lam=GAE_LAMBDA
 ):
     T = len(rewards)
     advantages = np.zeros(T, dtype=np.float32)
@@ -59,13 +59,13 @@ def compute_gae(
 
 
 def normalize_advantage(adv):
-    return (adv - np.mean(adv)) / (np.std(adv) + Constant.EPS)
+    return (adv - np.mean(adv)) / (np.std(adv) + EPS)
 
 
 class PPOTrainer:
     def __init__(self, model):
         self.model = model
-        self.optimizer = tf.keras.optimizers.Adam(PPOConfig.LR)
+        self.optimizer = tf.keras.optimizers.Adam(LR)
         self.train_metrics = {
             "policy_loss": [],
             "value_loss": [],
@@ -89,33 +89,33 @@ class PPOTrainer:
             surr1 = ratio * advantages
             surr2 = (
                 tf.clip_by_value(
-                    ratio, 1.0 - PPOConfig.CLIP_RATIO, 1.0 + PPOConfig.CLIP_RATIO
+                    ratio, 1.0 - CLIP_RATIO, 1.0 + CLIP_RATIO
                 )
                 * advantages
             )
             policy_loss = -tf.reduce_mean(tf.minimum(surr1, surr2))
 
             value_loss = (
-                tf.reduce_mean(tf.square(returns - values)) * PPOConfig.VALUE_COEF
+                tf.reduce_mean(tf.square(returns - values)) * VALUE_COEF
             )
 
             masked_logits = mask_logits_tf(logits, legal_masks)
             probs = tf.nn.softmax(masked_logits, axis=-1)
             entropy = -tf.reduce_sum(
-                probs * tf.math.log(probs + Constant.EPS), axis=-1
+                probs * tf.math.log(probs + EPS), axis=-1
             )
-            entropy_loss = -PPOConfig.ENTROPY_COEF * tf.reduce_mean(entropy)
+            entropy_loss = -ENTROPY_COEF * tf.reduce_mean(entropy)
 
             total_loss = policy_loss + value_loss + entropy_loss
 
         grads = tape.gradient(total_loss, self.model.trainable_variables)
         grads, grad_norm_before_clip = tf.clip_by_global_norm(
-            grads, PPOConfig.MAX_GRAD_NORM
+            grads, MAX_GRAD_NORM
         )
         self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
 
         clipfrac = tf.reduce_mean(
-            tf.cast(tf.abs(ratio - 1.0) > PPOConfig.CLIP_RATIO, tf.float32)
+            tf.cast(tf.abs(ratio - 1.0) > CLIP_RATIO, tf.float32)
         )
 
         return {
@@ -128,7 +128,7 @@ class PPOTrainer:
             "approx_kl": tf.reduce_mean(old_log_probs - new_log_probs),
         }
 
-    def collect_rollout(self, game, n_steps=PPOConfig.N_STEPS):
+    def collect_rollout(self, game, n_steps=N_STEPS):
         data = {
             "states": [], "legal_masks": [], "actions": [],
             "rewards": [], "dones": [], "values": [], "log_probs": []
@@ -162,7 +162,7 @@ class PPOTrainer:
         return self._finalize_rollout(data, ep_stats, game)
 
     def _get_legal_mask(self, game):
-        mask = np.zeros(Config.NUM_ACTIONS, dtype=np.float32)
+        mask = np.zeros(NUM_ACTIONS, dtype=np.float32)
         mask[game.get_playable_pits(symmetry=True)] = 1.0
         return mask
 
@@ -170,11 +170,11 @@ class PPOTrainer:
         s_tf = tf.convert_to_tensor([state], dtype=tf.float32)
         logits, value = self.model(s_tf, training=False)
         
-        masked_logits = tf.where(mask > 0, logits[0], Constant.LARGE_NEG)
+        masked_logits = tf.where(mask > 0, logits[0], LARGE_NEG)
         action_tf, probs_tf = sample_action(tf.expand_dims(masked_logits, 0))
         
         action = int(action_tf.numpy()[0])
-        log_prob = float(tf.math.log(probs_tf[0, action] + Constant.EPS).numpy())
+        log_prob = float(tf.math.log(probs_tf[0, action] + EPS).numpy())
         return action, log_prob, float(value.numpy()[0, 0])
 
     def _store_transition(self, data, s, m, a, r, d, v, lp):
@@ -197,8 +197,7 @@ class PPOTrainer:
         else:
             final_reward = 0.0
 
-        K = Config.K
-        gamma = Constant.GAMMA
+        gamma = GAMMA
         rewards = data["rewards"]
         for i in range(1, min(K, ep_length) + 1):
             rewards[-i] += final_reward * (gamma ** (i - 1))
@@ -239,10 +238,10 @@ class PPOTrainer:
         indices = np.arange(dataset_size)
 
         all_metrics = []
-        for epoch in range(PPOConfig.N_EPOCHS):
+        for epoch in range(N_EPOCHS):
             np.random.shuffle(indices)
-            for start in range(0, dataset_size, PPOConfig.BATCH_SIZE):
-                end = min(start + PPOConfig.BATCH_SIZE, dataset_size)
+            for start in range(0, dataset_size, BATCH_SIZE):
+                end = min(start + BATCH_SIZE, dataset_size)
                 batch_idx = indices[start:end]
 
                 batch_states = tf.convert_to_tensor(states[batch_idx])
@@ -286,7 +285,7 @@ class PPOTrainer:
         return illegal_before, illegal_after
 
     def train_ppo(
-        self, game=Game(), total_timesteps=PPOConfig.TOTAL_TIMESTEPS, n_steps=PPOConfig.N_STEPS, log_interval=1
+        self, game=Game(), total_timesteps=TOTAL_TIMESTEPS, n_steps=N_STEPS, log_interval=1
     ):
         timesteps = 0
         iteration = 0

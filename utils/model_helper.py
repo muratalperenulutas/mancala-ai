@@ -1,6 +1,6 @@
 import datetime
 from game.game import Game
-from utils.configs import Config
+from utils.configs import *
 import numpy as np
 from tensorflow.keras.models import load_model, save_model
 
@@ -12,7 +12,7 @@ class ModelHelper:
         return model
 
     @staticmethod
-    def normalize_single_fixed(features, fixed_total=Config.FIXED_TOTAL):
+    def normalize_single_fixed(features, fixed_total=FIXED_TOTAL):
         arr = np.array(features, dtype=np.float32).reshape(1, -1)
         
         board = arr[:, 0:14] / fixed_total

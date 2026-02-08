@@ -1,5 +1,5 @@
 from game.game import Game
-from utils.configs import Config
+from utils.configs import *
 from utils.model_helper import ModelHelper
 import numpy as np
 
@@ -45,8 +45,8 @@ class GameHelper:
     @staticmethod
     def _get_model_move(game, model, legal_actions):
         features = ModelHelper.build_features(game)
-        state_input = np.array(ModelHelper.normalize_single_fixed(features)).reshape(1, Config.INPUT_FEATURES)
-        
+        state_input = np.array(ModelHelper.normalize_single_fixed(features)).reshape(1, INPUT_FEATURES)
+
         # PPO has 2 outputs (actor, critic), DQN has 1
         predictions = model.predict(state_input, verbose=0)
         q_values = predictions[0][0] if len(model.outputs) == 2 else predictions[0]
@@ -63,21 +63,21 @@ class GameHelper:
 
     @staticmethod
     def get_move_score(game: Game):
-        score = game.stones_earned * Config.STONES_EARNED_WEIGHT
-        score += Config.SECOND_MOVE_WEIGHT if game.second_move else 0
+        score = game.stones_earned * STONES_EARNED_WEIGHT
+        score += SECOND_MOVE_WEIGHT if game.second_move else 0
         
         pits_range = range(0, 6) if game.current_player == 0 else range(7, 13)
-        score += sum(game.board[i] for i in pits_range) * Config.PIT_STONES_WEIGHT
+        score += sum(game.board[i] for i in pits_range) * PIT_STONES_WEIGHT
         
         if game.game_finish:
             my_bank = game.board[game.bank0i if game.current_player == 0 else game.bank1i]
             opponent_bank = game.board[game.bank1i if game.current_player == 0 else game.bank0i]
             
             if my_bank > opponent_bank:
-                score += Config.WIN_REWARD
+                score += WIN_REWARD
             elif my_bank < opponent_bank:
-                score -= Config.WIN_REWARD
+                score -= WIN_REWARD
             else:
-                score += Config.DRAW_REWARD
+                score += DRAW_REWARD
                 
         return score

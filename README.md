@@ -1,6 +1,6 @@
 # Mancala AI
 
-A Reinforcement Learning project using DQN and PPO to play Mancala.
+A Reinforcement Learning project using PPO to play Mancala.
 
 ## Project Structure
 - `game/`: Core game logic (pits, board, rules).
