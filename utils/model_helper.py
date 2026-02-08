@@ -1,8 +1,8 @@
 import sys
 import datetime
-from configs import Config
+from utils.configs import Config
 import numpy as np
-from game_helper import GameHelper
+from utils.game_helper import GameHelper
 import random
 from tensorflow.keras.saving import save_model
 from tensorflow.keras.models import load_model

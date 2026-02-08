@@ -1,5 +1,5 @@
 from game.game import Game
-from configs import Config
+from utils.configs import Config
 import numpy as np
 class GameHelper:
     @staticmethod
@@ -27,7 +27,7 @@ class GameHelper:
         else:
             raise ValueError("Model output structure not recognized.")
         
-        from model_helper import ModelHelper
+        from utils.model_helper import ModelHelper
         game.reset()
         game.initialize()
         print("Game started!")

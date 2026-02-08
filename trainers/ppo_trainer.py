@@ -2,9 +2,9 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Model, Input
 from tensorflow.keras.layers import Dense
-from configs import Config
-from model_helper import ModelHelper
-from game_helper import GameHelper
+from utils.configs import Config
+from utils.model_helper import ModelHelper
+from utils.game_helper import GameHelper
 
 
 class PPOConfig:

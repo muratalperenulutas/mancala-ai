@@ -172,7 +172,9 @@ class Game:
             self.move_stones(pit_index)
             return True
         print("Invalid pit selection")
-        return False    @staticmethod
+        return False
+
+    @staticmethod
     def play_against_model(board, model):
         board.reset()
         board.initialize()

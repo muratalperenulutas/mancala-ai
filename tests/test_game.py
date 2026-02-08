@@ -1,11 +1,11 @@
 import unittest
-from game.game import GameBoard
+from game.game import Game
 
 
-class TestGameBoard(unittest.TestCase):
+class TestGame(unittest.TestCase):
 
     def setUp(self):
-        self.board = GameBoard()
+        self.board = Game()
         self.board.initialize()
 
     def test_initialization(self):
@@ -22,11 +22,11 @@ class TestGameBoard(unittest.TestCase):
         self.assertEqual(self.board.node_dict[2].stone_count, 5)
         self.assertEqual(self.board.node_dict[3].stone_count, 5)
         self.assertEqual(self.board.node_dict[4].stone_count, 5)
-        self.assertEqual(self.board.current_player, 2)
+        self.assertEqual(self.board.current_player, 1)
 
     def test_player2_simple_move(self):
 
-        self.board.current_player = 2
+        self.board.current_player = 1
 
         self.board.play(7)
 
@@ -37,24 +37,24 @@ class TestGameBoard(unittest.TestCase):
         self.assertEqual(self.board.node_dict[10].stone_count, 5)
         self.assertEqual(self.board.node_dict[11].stone_count, 5)
 
-        self.assertEqual(self.board.current_player, 1)
+        self.assertEqual(self.board.current_player, 0)
 
     def test_player1_lands_in_own_bank(self):
         self.board.node_dict[2].stone_count = 4
         self.board.play(2)
         self.assertEqual(self.board.node_dict[2].stone_count, 0)
         self.assertEqual(self.board.bank1.stone_count, 1)
-        self.assertEqual(self.board.current_player, 1)
+        self.assertEqual(self.board.current_player, 0)
 
     def test_player2_lands_in_own_bank(self):
-        self.board.current_player = 2
+        self.board.current_player = 1
         self.board.node_dict[9].stone_count = 4
         self.board.play(9)
         self.assertEqual(self.board.node_dict[9].stone_count, 0)
 
         self.assertEqual(self.board.bank2.stone_count, 1)
 
-        self.assertEqual(self.board.current_player, 2)
+        self.assertEqual(self.board.current_player, 1)
 
     def test_player1_capture(self):
 
@@ -72,10 +72,10 @@ class TestGameBoard(unittest.TestCase):
         for i in range(0, 5):
             self.board.node_dict[i].stone_count = 0
         self.board.node_dict[5].stone_count = 1
-        self.board.current_player = 1
-        self.board.play(5, player=1)
+        self.board.current_player = 0
+        self.board.play(5)
 
-        self.assertTrue(self.board.gameover)
+        self.assertTrue(self.board.game_finish)
 
 if __name__ == "__main__":
     unittest.main()

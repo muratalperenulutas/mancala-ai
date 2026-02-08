@@ -6,10 +6,10 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.optimizers import Adam
-from game_helper import GameHelper
-from model_helper import ModelHelper
+from utils.game_helper import GameHelper
+from utils.model_helper import ModelHelper
 from game.game import Game
-from configs import Config
+from utils.configs import Config
 
 def create_model(input_shape=(Config.INPUT_FEATURES,), num_actions=Config.NUM_ACTIONS, hidden_layers=Config.HIDDEN_LAYERS):
     model = Sequential()

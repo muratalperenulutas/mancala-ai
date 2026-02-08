@@ -1,5 +1,5 @@
 import random
-from configs import Config
+from utils.configs import Config
 
 class ReplayBuffer:
     def __init__(self, max_size=Config.REPLAY_BUFFER_SIZE):
