@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Model, Input
@@ -6,7 +7,7 @@ from game.game import Game
 from utils.configs import *
 from utils.model_helper import ModelHelper
 from utils.game_helper import GameHelper
-
+from scripts.rating import Rating
 
 
 def build_actor_critic_model(input_dim=INPUT_FEATURES, hidden=HIDDEN_SIZE):
@@ -63,8 +64,8 @@ def normalize_advantage(adv):
 
 
 class PPOTrainer:
-    def __init__(self, model):
-        self.model = model
+    def __init__(self, model=None):
+        self.model = model if model is not None else build_actor_critic_model()
         self.optimizer = tf.keras.optimizers.Adam(LR)
         self.train_metrics = {
             "policy_loss": [],
@@ -128,34 +129,49 @@ class PPOTrainer:
             "approx_kl": tf.reduce_mean(old_log_probs - new_log_probs),
         }
 
-    def collect_rollout(self, game, n_steps=N_STEPS):
+    def collect_rollout(
+        self, game, n_steps=N_STEPS, opponent_model=None
+    ):
         data = {
             "states": [], "legal_masks": [], "actions": [],
             "rewards": [], "dones": [], "values": [], "log_probs": []
         }
         ep_stats = {"rewards": [], "lengths": []}
         curr_reward, curr_length = 0, 0
+        steps_collected = 0
 
-        for _ in range(n_steps):
+        while steps_collected < n_steps:
             player = game.current_player
             features = ModelHelper.build_features(game)
             state = ModelHelper.normalize_single_fixed(features)
             mask = self._get_legal_mask(game)
-            
-            action, log_prob, value = self._get_action_and_value(state, mask)
 
-            game.play(action, symmetry=True)
-            reward = GameHelper.get_move_score(game)
-            done = game.game_finish
+            if player == 0:
+                action, log_prob, value = self._get_action_and_value(
+                    state, mask, self.model
+                )
+                game.play(action, symmetry=True)
+                reward = GameHelper.get_move_score(game)
+                done = game.game_finish
 
-            self._store_transition(data, state, mask, action, reward, done, value, log_prob)
-            curr_reward += reward
-            curr_length += 1
+                self._store_transition(
+                    data, state, mask, action, reward, done, value, log_prob
+                )
+                curr_reward += reward
+                curr_length += 1
+                steps_collected += 1
+            else:
+                action = self._get_opponent_action(state, mask, opponent_model)
+                game.play(action, symmetry=True)
+                done = game.game_finish
 
             if done:
-                self._apply_final_rewards(data, game, player, curr_length)
-                ep_stats["rewards"].append(curr_reward)
-                ep_stats["lengths"].append(curr_length)
+                if curr_length > 0:
+                    self._apply_final_rewards(
+                        data, game, 0, curr_length
+                    )
+                    ep_stats["rewards"].append(curr_reward)
+                    ep_stats["lengths"].append(curr_length)
                 curr_reward, curr_length = 0, 0
                 game = Game()
 
@@ -166,9 +182,9 @@ class PPOTrainer:
         mask[game.get_playable_pits(symmetry=True)] = 1.0
         return mask
 
-    def _get_action_and_value(self, state, mask):
+    def _get_action_and_value(self, state, mask, model):
         s_tf = tf.convert_to_tensor([state], dtype=tf.float32)
-        logits, value = self.model(s_tf, training=False)
+        logits, value = model(s_tf, training=False)
         
         masked_logits = tf.where(mask > 0, logits[0], LARGE_NEG)
         action_tf, probs_tf = sample_action(tf.expand_dims(masked_logits, 0))
@@ -176,6 +192,16 @@ class PPOTrainer:
         action = int(action_tf.numpy()[0])
         log_prob = float(tf.math.log(probs_tf[0, action] + EPS).numpy())
         return action, log_prob, float(value.numpy()[0, 0])
+
+    def _get_opponent_action(self, state, mask, opponent_model):
+        model = opponent_model if opponent_model is not None else self.model
+        s_tf = tf.convert_to_tensor([state], dtype=tf.float32)
+        outputs = model(s_tf, training=False)
+        logits = outputs[0] if isinstance(outputs, (list, tuple)) else outputs
+
+        masked_logits = tf.where(mask > 0, logits[0], LARGE_NEG)
+        probs = tf.nn.softmax(masked_logits, axis=-1)
+        return int(tf.argmax(probs).numpy())
 
     def _store_transition(self, data, s, m, a, r, d, v, lp):
         data["states"].append(s)
@@ -284,11 +310,52 @@ class PPOTrainer:
         )
         return illegal_before, illegal_after
 
+    def train_with_rating_cycle(self, num_cycles=10, timesteps_per_cycle=TOTAL_TIMESTEPS):
+        rating_system = Rating()
+        
+        for cycle in range(num_cycles):
+            print(f"\n{'#' * 80}")
+            print(f"Starting Training Cycle {cycle + 1}/{num_cycles}")
+            print(f"{'#' * 80}\n")
+            
+            training_metrics = self.train_ppo(
+                total_timesteps=timesteps_per_cycle,
+                opponent_model=None 
+            )
+            
+            print("\nEvaluating model performance...")
+            new_elo = rating_system.evaluate_model(self.model)
+            print(f"Calculated Elo: {new_elo:.2f}")
+            
+            try:
+                rating_system.check_performance_drop(new_elo)
+            except ValueError as e:
+                raise
+            
+            ModelHelper.save_model(
+                self.model, 
+                t=f"cycle_{cycle+1}", 
+                metric=training_metrics, 
+                elo=new_elo
+            )
+            
+            print(f"\nCycle {cycle + 1} completed. Elo: {new_elo:.2f}")
+
     def train_ppo(
-        self, game=Game(), total_timesteps=TOTAL_TIMESTEPS, n_steps=N_STEPS, log_interval=1
+        self,
+        game=Game(),
+        total_timesteps=TOTAL_TIMESTEPS,
+        n_steps=N_STEPS,
+        log_interval=1,
+        opponent_model=None,
     ):
         timesteps = 0
         iteration = 0
+        
+        if opponent_model is None:
+            opponent_models = ModelHelper.get_opponent_models()
+        else:
+            selected_model = opponent_model
 
         print(f"\nStarting PPO Training...")
         print(f"Total timesteps: {total_timesteps}")
@@ -296,9 +363,16 @@ class PPOTrainer:
         print(f"=" * 80)
 
         while timesteps < total_timesteps:
-            iteration += 1
-
-            rollout_data = self.collect_rollout(game, n_steps=n_steps)
+            if opponent_model is None:
+                selected_model = opponent_models[iteration % len(opponent_models)] if opponent_models[0] is not None else None
+                
+            iteration += 1            
+            
+            rollout_data = self.collect_rollout(
+                game,
+                n_steps=n_steps,
+                opponent_model=selected_model,
+            )
             timesteps += len(rollout_data["states"])
 
             il_before, il_after = self.compute_illegal_rates(
@@ -340,11 +414,4 @@ class PPOTrainer:
                 print(f"  Illegal Before Mask: {il_before:.3f}")
                 print(f"  Illegal After Mask:  {il_after:.3f}")
 
-
-        ModelHelper.save_model(self.model, t=iteration)
-        print(f"\nFinal model saved at iteration {iteration}")
-
-        print(f"\n{'=' * 80}")
-        print("PPO Training Complete!")
-        print(f"{'=' * 80}\n")
-        return self.train_metrics
+        return metrics

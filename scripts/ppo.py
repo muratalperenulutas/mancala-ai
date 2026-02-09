@@ -1,17 +1,14 @@
 from trainers.ppo_trainer import build_actor_critic_model
 from trainers.ppo_trainer import PPOTrainer
+from utils.model_helper import ModelHelper
 
 def main():
-    ppo_model = build_actor_critic_model()
-    ppo_model.summary()
-
     print("\nStarting PPO training...")
 
-    trainer = PPOTrainer(ppo_model)
-    metrics = trainer.train_ppo()
+    trainer = PPOTrainer()
+    trainer.train_with_rating_cycle(num_cycles=10)
 
-    print("\nTraining completed successfully!")
-    print(f"Final metrics: {metrics}")
+    print("\nTraining cycles completed successfully!")
 
 if __name__ == "__main__":
     main()

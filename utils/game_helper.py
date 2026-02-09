@@ -47,12 +47,50 @@ class GameHelper:
         features = ModelHelper.build_features(game)
         state_input = np.array(ModelHelper.normalize_single_fixed(features)).reshape(1, INPUT_FEATURES)
 
-        # PPO has 2 outputs (actor, critic), DQN has 1
-        predictions = model.predict(state_input, verbose=0)
-        q_values = predictions[0][0] if len(model.outputs) == 2 else predictions[0]
+        # PPO has 2 outputs (actor, critic)
+        predictions = model(state_input, training=False)
+        logits = predictions[0]    
+        q_values = logits[0]
 
         legal_q_values = [q_values[a] for a in legal_actions]
         return legal_actions[np.argmax(legal_q_values)]            
+
+    @staticmethod
+    def play_between_models(model1, model2, num_games=100):
+        wins = 0
+        draws = 0
+        losses = 0
+        
+        for i in range(num_games):
+            game = Game()
+            p1_starts = i % 2 == 0
+            
+            while not game.game_finish:
+                legal_actions = game.get_playable_pits(symmetry=True)
+                current_player = game.current_player
+                
+                if (p1_starts and current_player == 0) or (not p1_starts and current_player == 1):
+                    active_model = model1
+                else:
+                    active_model = model2
+                
+                action = GameHelper._get_model_move(game, active_model, legal_actions)
+                game.play(action, symmetry=True)
+            
+            s1 = game.board[game.bank0i]
+            s2 = game.board[game.bank1i]
+            
+            m1_score = s1 if p1_starts else s2
+            m2_score = s2 if p1_starts else s1
+            
+            if m1_score > m2_score:
+                wins += 1
+            elif m1_score < m2_score:
+                losses += 1
+            else:
+                draws += 1
+                
+        return wins, draws, losses
     
     @staticmethod
     def get_final_score(game: Game, player: int):
